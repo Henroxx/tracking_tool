@@ -1,44 +1,74 @@
-from unicodedata import category
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Date, Float
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
+from __future__ import annotations
+
+from datetime import date, datetime
+from decimal import Decimal
+from typing import List, Optional
+
+from sqlalchemy import ForeignKey, String, Text, DateTime, Numeric, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
+
 
 class TrackingEntry(Base):
     """
     Entry into the main database, represents a tracked event or process
     """
-    __tablename__ = "tracking_entries"
-    
-    transaction_id = Column(Integer, primary_key=True, index=True)
-    category_id = Column(Integer, ForeignKey("categories.category_id"))
-    date = Column(Date)
-    unit_id = Column(Integer, ForeignKey("unit.unit_id"))
-    type_id = Column(Integer, ForeignKey("type.type_id"))
-    quantity = Column(Integer)
-    tag_id = Column(Integer, ForeignKey("tag.tag_id"))
-    comment = Column(Text)
+    __tablename__ = "tracking_entry"
 
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
+    transaction_id: Mapped[int] = mapped_column(primary_key=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey("category.category_id"), nullable=False)
+    date: Mapped[date] = mapped_column(nullable=False)
+    unit_id: Mapped[int] = mapped_column(ForeignKey("unit.unit_id"), nullable=False)
+    type_id: Mapped[int] = mapped_column(ForeignKey("type.type_id"), nullable=False)
+    quantity: Mapped[int] = mapped_column(nullable=False)
+    tag_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tag.tag_id"), nullable=True)
+    comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Timestamps: DB-seitig, TZ-aware
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    category: Mapped["Category"] = relationship(back_populates="entries")
+    unit: Mapped["Unit"] = relationship(back_populates="entries")
+    type: Mapped["Type"] = relationship(back_populates="entries")
+    tag: Mapped[Optional["Tag"]] = relationship(back_populates="entries")
+
 
 class Category(Base):
     """
-    Hierarchical category of the tracked event/process. Allows to group categories for better analysis
+    Hierarchical category of the tracked event/process. Allows grouping for better analysis.
     """
-    __tablename__ = "categories"
+    __tablename__ = "category"
 
-    category_id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, nullable=False)
-    description = Column(Text)
-    parent_id = Column(Integer, ForeignKey("categories.category_id"))
+    category_id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("category.category_id"), nullable=True)
 
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Self-referential hierarchy
+    parent: Mapped[Optional["Category"]] = relationship(
+        remote_side="Category.category_id", back_populates="children"
+    )
+    children: Mapped[List["Category"]] = relationship(back_populates="parent")
+
+    # Backref to entries
+    entries: Mapped[List["TrackingEntry"]] = relationship(back_populates="category")
+
 
 class Unit(Base):
     """
@@ -46,36 +76,63 @@ class Unit(Base):
     """
     __tablename__ = "unit"
 
-    unit_id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, nullable=False)
-    unit_type = Column(String)
-    conversion_factor = Column(Float, default=1.0)          #Might cause problems later bc float * integer
+    unit_id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    unit_type: Mapped[Optional[str]] = mapped_column(String)
+    # exact arithmetic: Decimal + Numeric
+    conversion_factor: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), server_default="1.00"
+    )
 
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    entries: Mapped[List["TrackingEntry"]] = relationship(back_populates="unit")
+
 
 class Type(Base):
     """
-    Entry into the main database
+    Type of the tracked entry (hierarchical).
     """
     __tablename__ = "type"
 
-    type_id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, nullable=False)
-    parent_id = Column(Integer, ForeignKey("type.type_id"))
+    type_id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("type.type_id"))
 
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    parent: Mapped[Optional["Type"]] = relationship(
+        remote_side="Type.type_id", back_populates="children"
+    )
+    children: Mapped[List["Type"]] = relationship(back_populates="parent")
+
+    entries: Mapped[List["TrackingEntry"]] = relationship(back_populates="type")
 
 
 class Tag(Base):
     """
-    Tag to enhance analysis potential
+    Tag to enhance analysis potential.
     """
     __tablename__ = "tag"
 
-    tag_id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, nullable=False)
+    tag_id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
 
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)) 
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    entries: Mapped[List["TrackingEntry"]] = relationship(back_populates="tag")

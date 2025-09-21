@@ -4,7 +4,7 @@
 
 ```mermaid
 erDiagram
-    TRACKING_ENTRIES {
+    TRACKING_ENTRY {
         int transaction_id PK
         int category_id FK
         date date
@@ -15,43 +15,43 @@ erDiagram
         text comment
     }
     
-    CATEGORIES {
+    CATEGORY {
         int category_id PK
         string name
         text description
         int parent_id FK
     }
     
-    UNITS {
+    UNIT {
         int unit_id PK
         string name
         string unit_type
         decimal conversion_factor
     }
     
-    TYPES {
+    TYPE {
         int type_id PK
         string name
         int parent_id FK
     }
     
-    TAGS {
+    TAG {
         int tag_id PK
         string name
     }
     
-    TRACKING_ENTRIES ||--|| CATEGORIES : "belongs to"
-    TRACKING_ENTRIES ||--|| UNITS : "measured in"
-    TRACKING_ENTRIES ||--|| TYPES : "is of type"
-    TRACKING_ENTRIES ||--|| TAGS : "tagged with"
-    CATEGORIES ||--o| CATEGORIES : "parent/child"
-    TYPES ||--o| TYPES : "parent/child"
+    TRACKING_ENTRY ||--|| CATEGORY : "belongs to"
+    TRACKING_ENTRY ||--|| UNIT : "measured in"
+    TRACKING_ENTRY ||--|| TYPE : "is of type"
+    TRACKING_ENTRY ||--|| TAG : "tagged with"
+    CATEGORY ||--o| CATEGORY : "parent/child"
+    TYPE ||--o| TYPE : "parent/child"
 ```
 
-## Beschreibung
+## Description
 
-- **TRACKING_ENTRIES**: Haupttabelle für alle Tracking-Einträge
-- **CATEGORIES**: Hierarchische Kategorien (z.B. Sport > Laufen)
-- **UNITS**: Maßeinheiten mit Konvertierungsfaktoren
-- **TYPES**: Hierarchische Typen (z.B. Zeit-Tracking > Arbeit)
-- **TAGS**: Flexible Tags für zusätzliche Kategorisierung
+- **TRACKING_ENTRIES**: Main table for all tracking entries
+- **CATEGORIES**: Hierarchical categories (e.g. Sports > Running)  
+- **UNITS**: Units of measurement with conversion factors
+- **TYPES**: Hierarchical types (e.g. Education > Bachelor)
+- **TAGS**: Flexible tags for additional categorization
